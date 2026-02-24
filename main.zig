@@ -387,7 +387,7 @@ pub fn main() !void {
     var guess_characters: std.ArrayListUnmanaged(Character) = .empty;
     defer guess_characters.clearAndFree(gpa);
 
-    while (true) {
+    main_loop: while (true) {
         defer guess_characters.clearAndFree(gpa);
 
         try out.print("Enter your guess: ", .{});
@@ -421,7 +421,7 @@ pub fn main() !void {
                     try out.print("try again... couldn't parse.\n", .{});
                     try out.flush();
 
-                    continue;
+                    continue :main_loop;
                 }
             }
 
