@@ -357,7 +357,9 @@ pub fn main() !void {
     var in_impl = std.fs.File.stdin().reader(&in_buf);
     const in = &in_impl.interface;
 
-    var random: std.Random.DefaultPrng = .init(@truncate(@as(u128, @bitCast(std.time.nanoTimestamp()))));
+    const day = std.time.epoch.EpochSeconds.getEpochDay(.{ .secs = @intCast(std.time.timestamp()) }).day;
+
+    var random: std.Random.DefaultPrng = .init(day);
 
     const word = words.items[@intCast(random.next() % words.items.len)];
 
