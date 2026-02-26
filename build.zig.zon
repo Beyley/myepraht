@@ -1,0 +1,12 @@
+.{
+    .name = .myepraht,
+    .version = "0.15.2",
+    .dependencies = .{
+        .laghari = .{
+            .url = "git+https://github.com/Beyley/liblaghari#3b5dd674fcde9ed8d1fb50fbd626fdf4ef45b113",
+            .hash = "laghari-0.0.0-KEQne3RKAwB2od7p5ae9vyAaEQ9cOyiWiK3GK3QY2Jnj",
+        },
+    },
+    .paths = .{""},
+    .fingerprint = 0x84b81c570256dfe6,
+}

@@ -2,6 +2,8 @@ const std = @import("std");
 const esc_code = std.ascii.control_code.esc;
 const log = std.log;
 
+const laghari = @import("laghari");
+
 const chunk_even_color = "[38;2;46;194;126m";
 const chunk_odd_color = "[38;2;143;240;164m";
 const correct_color = "[38;2;0;243;25m";
@@ -234,12 +236,38 @@ const Character = enum {
     }
 };
 
+const Assignment = union(enum) {
+    /// Is at the start of the word
+    word_start: void,
+    /// Is at the end of the word
+    word_end: void,
+    /// Is a consonant match
+    consonant_match: void,
+    /// Is a vowel match
+    vowel_match: void,
+    /// Is a sole matching character
+    sole_correct: void,
+    /// Is part of a chunk with the specified index
+    chunk: usize,
+    /// Has no assignment
+    none: void,
+
+    pub fn correct(self: @This()) bool {
+        return switch (self) {
+            .word_start => true,
+            .word_end => true,
+            .sole_correct => true,
+            .chunk => true,
+            .consonant_match => false,
+            .vowel_match => false,
+            .none => false,
+        };
+    }
+};
+
 const character_array = std.enums.values(Character);
 
 const num_characters = @typeInfo(Character).@"enum".fields.len;
-
-// Can fit all characters
-const Integer = u128;
 
 const Word = struct {
     nahnya: []const u8,
@@ -290,6 +318,65 @@ fn checkEnd(gpa: std.mem.Allocator, buf: []Character.Comparison, word: []const C
     const ret = checkStart(buf, reverse_word, reverse_input);
     std.mem.reverse(Character.Comparison, ret);
     return ret;
+}
+
+fn dumpGuess(out: *std.Io.Writer, assignments: []Assignment, characters: []Character) !void {
+    var mebi_last_assignment: ?Assignment = null;
+    for (assignments, characters) |assignment, input_character| {
+        defer mebi_last_assignment = assignment;
+
+        const input_str = @tagName(input_character);
+
+        if (mebi_last_assignment) |last_assignment| {
+            if (last_assignment == .word_start and assignment != .word_start) {
+                try out.writeByte(']');
+            }
+
+            if (last_assignment != .word_end and assignment == .word_end) {
+                try out.writeByte('[');
+            }
+        } else {
+            if (assignment == .word_start) {
+                try out.writeByte('(');
+            }
+        }
+
+        switch (assignment) {
+            .chunk => |chunk_id| {
+                const even = (chunk_id % 2) == 0;
+
+                if (even) {
+                    try writeColor(out, chunk_even_color);
+                } else {
+                    try writeColor(out, chunk_odd_color);
+                }
+            },
+            .word_start, .word_end, .sole_correct => {
+                try writeColor(out, correct_color);
+            },
+            .consonant_match => {
+                try writeColor(out, consonant_color);
+            },
+            .vowel_match => {
+                try writeColor(out, vowel_color);
+            },
+            .none => {
+                try writeColor(out, none_color);
+            },
+        }
+
+        try out.writeAll(input_str);
+
+        try clearFormatting(out);
+    }
+
+    if (mebi_last_assignment) |last_assignment| {
+        if (last_assignment == .word_end) {
+            try out.writeByte(')');
+        }
+    }
+
+    try out.writeByte('\n');
 }
 
 pub fn main() !void {
@@ -389,6 +476,21 @@ pub fn main() !void {
     var guess_characters: std.ArrayListUnmanaged(Character) = .empty;
     defer guess_characters.clearAndFree(gpa);
 
+    var guesses_assignments: std.ArrayListUnmanaged([]Assignment) = .empty;
+    defer {
+        for (guesses_assignments.items) |guess| {
+            gpa.free(guess);
+        }
+        guesses_assignments.deinit(gpa);
+    }
+    var guesses_characters: std.ArrayListUnmanaged([]Character) = .empty;
+    defer {
+        for (guesses_characters.items) |guess| {
+            gpa.free(guess);
+        }
+        guesses_characters.deinit(gpa);
+    }
+
     main_loop: while (true) {
         defer guess_characters.clearAndFree(gpa);
 
@@ -444,35 +546,6 @@ pub fn main() !void {
 
             const match_scratch = try gpa.alloc(Character.Comparison, input_characters.len);
             defer gpa.free(match_scratch);
-
-            const Assignment = union(enum) {
-                /// Is at the start of the word
-                word_start: void,
-                /// Is at the end of the word
-                word_end: void,
-                /// Is a consonant match
-                consonant_match: void,
-                /// Is a vowel match
-                vowel_match: void,
-                /// Is a sole matching character
-                sole: void,
-                /// Is part of a chunk with the specified index
-                chunk: usize,
-                /// Has no assignment
-                none: void,
-
-                pub fn correct(self: @This()) bool {
-                    return switch (self) {
-                        .word_start => true,
-                        .word_end => true,
-                        .sole => true,
-                        .chunk => true,
-                        .consonant_match => false,
-                        .vowel_match => false,
-                        .none => false,
-                    };
-                }
-            };
 
             const assignments = try gpa.alloc(Assignment, input_characters.len);
             defer gpa.free(assignments);
@@ -609,7 +682,7 @@ pub fn main() !void {
                             .different => continue,
                             .equal => {
                                 word_used.* = true;
-                                assignment.* = .sole;
+                                assignment.* = .sole_correct;
                             },
                             .same_consonant => {
                                 assignment.* = .consonant_match;
@@ -632,63 +705,11 @@ pub fn main() !void {
                 }
             }
 
-            var mebi_last_assignment: ?Assignment = null;
-            for (assignments, input_characters) |assignment, input_character| {
-                defer mebi_last_assignment = assignment;
-
-                const input_str = @tagName(input_character);
-
-                if (mebi_last_assignment) |last_assignment| {
-                    if (last_assignment == .word_start and assignment != .word_start) {
-                        try out.writeByte(']');
-                    }
-
-                    if (last_assignment != .word_end and assignment == .word_end) {
-                        try out.writeByte('[');
-                    }
-                } else {
-                    if (assignment == .word_start) {
-                        try out.writeByte('(');
-                    }
-                }
-
-                switch (assignment) {
-                    .chunk => |chunk_id| {
-                        const even = (chunk_id % 2) == 0;
-
-                        if (even) {
-                            try writeColor(out, chunk_even_color);
-                        } else {
-                            try writeColor(out, chunk_odd_color);
-                        }
-                    },
-                    .word_start, .word_end, .sole => {
-                        try writeColor(out, correct_color);
-                    },
-                    .consonant_match => {
-                        try writeColor(out, consonant_color);
-                    },
-                    .vowel_match => {
-                        try writeColor(out, vowel_color);
-                    },
-                    .none => {
-                        try writeColor(out, none_color);
-                    },
-                }
-
-                try out.writeAll(input_str);
-
-                try clearFormatting(out);
-            }
-
-            if (mebi_last_assignment) |last_assignment| {
-                if (last_assignment == .word_end) {
-                    try out.writeByte(')');
-                }
-            }
-
-            try out.writeByte('\n');
+            try dumpGuess(out, assignments, input_characters);
             try out.flush();
+
+            try guesses_assignments.append(gpa, try gpa.dupe(Assignment, assignments));
+            try guesses_characters.append(gpa, try guess_characters.toOwnedSlice(gpa));
 
             if (all_correct) {
                 try writeColor(out, correct_color);
@@ -705,4 +726,52 @@ pub fn main() !void {
             break;
         }
     }
+
+    try out.writeByte('\n');
+
+    const hekenic_day: laghari.time.hekenic.YearMonthDay = .fromGregorianEpochDay(.{ .day = day });
+    try out.print("Myepraht hei {s} {d} (Keinkw kefikrh {d})\n", .{
+        hekenic_day.month.romanizedNameSafe(.neptunian),
+        hekenic_day.day(),
+        hekenic_day.year,
+    });
+    try out.writeByte('\n');
+
+    try clearFormatting(out);
+    for (guesses_assignments.items) |assignments| {
+        // 🟥🟪🟦🟩🟨🟧⬛
+
+        var was_last_correct: bool = false;
+        for (assignments) |assignment| {
+            defer was_last_correct = switch (assignment) {
+                .none, .consonant_match, .vowel_match => false,
+                .chunk, .sole_correct, .word_start, .word_end => true,
+            };
+
+            switch (assignment) {
+                .none => {
+                    try out.writeAll("🟥");
+                },
+                .chunk, .sole_correct => {
+                    if (!was_last_correct) {
+                        try out.writeAll("🟩");
+                    }
+                },
+                .word_start, .word_end => {
+                    if (!was_last_correct) {
+                        try out.writeAll("🟢");
+                    }
+                },
+                .consonant_match => {
+                    try out.writeAll("🟨");
+                },
+                .vowel_match => {
+                    try out.writeAll("🟦");
+                },
+            }
+        }
+        try out.writeByte('\n');
+    }
+
+    try out.flush();
 }

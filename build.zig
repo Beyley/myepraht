@@ -4,10 +4,19 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const liblaghari = b.dependency("laghari", .{}).module("laghari");
+
     const mod = b.createModule(.{
         .root_source_file = b.path("main.zig"),
         .optimize = optimize,
         .target = target,
+
+        .imports = &.{
+            .{
+                .name = "laghari",
+                .module = liblaghari,
+            },
+        },
     });
 
     const exe = b.addExecutable(.{
