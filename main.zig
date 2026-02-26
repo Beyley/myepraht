@@ -329,9 +329,9 @@ pub fn main() !void {
                 }
             } else {
                 for (characters.items) |character| {
-                    log.err("added {s}\n", .{@tagName(character)});
+                    log.err("added {s}", .{@tagName(character)});
                 }
-                log.err("word: {s}, left: {s}\n", .{ nahnya, nahnya[index..] });
+                log.err("word: {s}, left: {s}", .{ nahnya, nahnya[index..] });
                 @panic("shit.");
             }
         }
@@ -416,9 +416,9 @@ pub fn main() !void {
                     }
                 } else {
                     for (guess_characters.items) |character| {
-                        log.err("added {s}\n", .{@tagName(character)});
+                        log.debug("added {s}", .{@tagName(character)});
                     }
-                    log.err("word: {s}, left: {s}\n", .{ input, input[index..] });
+                    log.debug("word: {s}, left: {s}", .{ input, input[index..] });
 
                     try out.print("try again... couldn't parse.\n", .{});
                     try out.flush();
