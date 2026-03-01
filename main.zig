@@ -424,7 +424,7 @@ pub fn main() !void {
         }
 
         // skip single letter words
-        if (characters.items.len <= 1) {
+        if (characters.items.len <= 2) {
             continue;
         }
 
